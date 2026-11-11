@@ -5,15 +5,27 @@ import re
 from dataclasses import dataclass
 
 import sympy as sp
-from sympy.parsing.sympy_parser import (convert_xor, implicit_multiplication_application,
-    parse_expr, standard_transformations)
+from sympy.parsing.sympy_parser import (
+    convert_xor, implicit_multiplication_application, parse_expr,
+    standard_transformations,
+)
 
 X = sp.Symbol("x", real=True)
 TRANSFORMS = standard_transformations + (implicit_multiplication_application, convert_xor)
 ALLOWED = {name: getattr(sp, name) for name in (
-    "sin cos tan asin acos atan sinh cosh tanh exp log sqrt Abs pi E".split()
-)}
-ALLOWED.update({"abs": sp.Abs, "log": sp.log, "ln": sp.log, "x": X})
+    "sin cos tan cot sec csc asin acos atan sinh cosh tanh exp log sqrt Abs "
+    "floor ceiling pi E Min Max"
+).split()}
+ALLOWED.update({"abs": sp.Abs, "ln": sp.log, "log10": lambda value: sp.log(value, 10),
+                "log2": lambda value: sp.log(value, 2), "cbrt": lambda value: sp.real_root(value, 3), "x": X, "e": sp.E})
+ALLOWED.update({"ceil": sp.ceiling, "round": lambda value: sp.floor(value + sp.Rational(1, 2))})
+GLOBALS = {"__builtins__": {}, "Integer": sp.Integer, "Float": sp.Float,
+           "Rational": sp.Rational, "Symbol": sp.Symbol, "Function": sp.Function,
+           "Add": sp.Add, "Mul": sp.Mul, "Pow": sp.Pow, "Tuple": sp.Tuple,
+           "And": sp.And, "Or": sp.Or, "Not": sp.Not, "Eq": sp.Eq,
+           "Ne": sp.Ne, "Lt": sp.Lt, "Le": sp.Le, "Gt": sp.Gt, "Ge": sp.Ge,
+           "Abs": sp.Abs, "log": sp.log, "sin": sp.sin, "cos": sp.cos,
+           "tan": sp.tan, "cot": lambda value: sp.cos(value) / sp.sin(value)}
 
 
 @dataclass
@@ -24,88 +36,104 @@ class ParsedInput:
     points: list[tuple[float, float]]
 
 
-def parse_expression(source: str) -> sp.Expr:
-    text = source.strip().replace("−", "-").replace("²", "^2").replace("³", "^3")
-    # Normalize common LaTeX commands used when copying equations.
-    text = (text.replace(r"\left", "").replace(r"\right", "")
-            .replace(r"\ln", "log").replace(r"\sin", "sin")
-            .replace(r"\cos", "cos").replace(r"\tan", "tan")
-            .replace(r"\cdot", "*").replace(r"\times", "*")
-            .replace(r"\leq", "<=").replace(r"\le", "<=")
-            .replace(r"\geq", ">=").replace(r"\ge", ">="))
+def _normalize(text: str) -> str:
+    text = text.strip()
+    for old, new in (("−", "-"), ("–", "-"), ("π", "pi"), ("∞", "oo"),
+                     ("≤", "<="), ("≥", ">="), ("≠", "!="), ("×", "*"), ("·", "*")):
+        text = text.replace(old, new)
+    text = re.sub(r"\\(?:left|right)\b", "", text)
+    for command, value in (("pi", "pi"), ("leq", "<="), ("le", "<="),
+                           ("geq", ">="), ("ge", ">="), ("neq", "!="),
+                           ("cdot", "*"), ("times", "*"), ("sin", "sin"),
+                           ("cos", "cos"), ("tan", "tan"), ("cot", "cot"),
+                           ("sec", "sec"), ("csc", "csc"), ("ln", "ln"),
+                           ("sqrt", "sqrt"), ("abs", "abs"), ("log", "log"),
+                           ("exp", "exp")):
+        text = text.replace("\\" + command, value)
     text = re.sub(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"((\1)/(\2))", text)
-    # Accept domain suffixes both in braces and in the common |x| <= 2pi form.
-    chain_domain = re.search(r"\|?\s*(-?\d+(?:\.\d+)?\s*\*?\s*pi|-?\d+(?:\.\d+)?)\s*\|?\s*(<=|<)\s*x\s*(<=|<)\s*\|?\s*(\d+(?:\.\d+)?\s*\*?\s*pi|\d+(?:\.\d+)?)\s*\|?\s*$", text)
-    if chain_domain:
-        lo, lop, hip, hi = chain_domain.groups()
-        body = text[:chain_domain.start()].rstrip()
-        def bound_value(value):
-            value = re.sub(r"\s*\*?\s*pi", "*pi", value)
-            return parse_expr(value, local_dict=ALLOWED.copy(), transformations=TRANSFORMS,
-                global_dict={"__builtins__": {}, "Integer": sp.Integer, "Float": sp.Float, "Rational": sp.Rational,
-                             "Symbol": sp.Symbol, "Function": sp.Function, "Add": sp.Add, "Mul": sp.Mul, "Pow": sp.Pow})
-        lower, upper = bound_value(lo), bound_value(hi)
-        test = sp.And(X >= lower if lop == "<=" else X > lower,
-                      X <= upper if hip == "<=" else X < upper)
-        return sp.Piecewise((parse_expression(body), test), (sp.nan, True))
-    unbraced = re.search(r"\|\s*x\s*\|\s*(?:<=|<)\s*(?:\d+(?:\.\d+)?\s*\*?\s*pi|\d+(?:\.\d+)?)\s*$", text)
-    if unbraced:
-        condition = unbraced.group(0).strip()
-        body = text[:unbraced.start()].rstrip()
-        m = re.fullmatch(r"\|\s*x\s*\|\s*(<=|<)\s*(\d+(?:\.\d+)?\s*\*?\s*pi|\d+(?:\.\d+)?)", condition)
-        op, bound = m.groups()
-        bound_expr = parse_expr(bound.replace("pi", "*pi"), local_dict=ALLOWED.copy(), transformations=TRANSFORMS,
-            global_dict={"__builtins__": {}, "Integer": sp.Integer, "Float": sp.Float, "Rational": sp.Rational,
-                         "Symbol": sp.Symbol, "Function": sp.Function, "Add": sp.Add, "Mul": sp.Mul, "Pow": sp.Pow})
-        test = sp.Le(sp.Abs(X), bound_expr) if op == "<=" else sp.Lt(sp.Abs(X), bound_expr)
-        return sp.Piecewise((parse_expression(body), test), (sp.nan, True))
-    domain = re.search(r"\{\s*(.*?)\s*\}\s*$", text)
-    if domain and re.search(r"\bx\b", domain.group(1)) and re.search(r"<=|>=|<|>", domain.group(1)):
-        condition = domain.group(1).replace(r"\le", "<=").replace(r"\ge", ">=")
-        body = text[:domain.start()].strip()
-        chain = re.fullmatch(r"(-?\d+(?:\.\d+)?)\s*(<=|<)\s*x\s*(<=|<)\s*(-?\d+(?:\.\d+)?)", condition)
-        if chain:
-            lo, lop, hip, hi = chain.groups()
-            test = sp.And(X >= float(lo) if lop == "<=" else X > float(lo),
-                          X <= float(hi) if hip == "<=" else X < float(hi))
-        else:
-            test = None
-            for op, rel in (("<=", sp.Le), (">=", sp.Ge), ("<", sp.Lt), (">", sp.Gt)):
-                match = re.fullmatch(rf"x\s*{re.escape(op)}\s*(-?\d+(?:\.\d+)?)", condition)
-                if match:
-                    test = rel(X, float(match.group(1)))
-                    break
-            if test is None:
-                raise ValueError("Use restrictions like {x < -1}, {-1 <= x <= 2}, or {x > 2}.")
-        return sp.Piecewise((parse_expression(body), test), (sp.nan, True))
-    text = text.replace("{", "(").replace("}", ")")
-    # Paired vertical bars denote absolute value: |expression| -> abs(expression).
+    text = re.sub(r"\\sqrt\s*\{([^{}]+)\}", r"sqrt(\1)", text)
+    text = text.replace("\\{", "{").replace("\\}", "}")
+    text = text.replace("**", "^")
+    text = re.sub(r"\b(sin|cos|tan|cot|sec|csc)\s*\^\s*(\d+)\s*\(\s*([^()]*)\s*\)",
+                  r"(\1(\3))^\2", text)
+    return text
+
+
+def _sympy(text: str) -> sp.Expr:
+    text = _normalize(text).replace("{", "(").replace("}", ")")
+    text = re.sub(r"x(?=(?:sin|cos|tan|cot|sec|csc|ln|log|sqrt|abs|exp)\s*\()", "x*", text)
     text = re.sub(r"\|([^|]+)\|", r"abs(\1)", text)
     if not text:
         raise ValueError("Enter an equation or expression.")
-    if "=" in text:
-        left, right = text.split("=", 1)
-        left = left.strip().removeprefix("y").strip() or "0"
-        right = right.strip().removeprefix("y").strip() or "0"
-        text = f"({right})-({left})"
-    if not re.fullmatch(r"[\w\s+*/^().,!-]+", text):
+    if not re.fullmatch(r"[A-Za-z0-9_\s+*/^().,!<>=|&-]+", text):
         raise ValueError("Use standard arithmetic and supported functions only.")
-    identifiers = set(re.findall(r"[A-Za-z_]\w*", text))
-    unsupported = identifiers - set(ALLOWED)
+    names = set(re.findall(r"[A-Za-z_]\w*", re.sub(r"(?<=\d)[eE][+-]?\d+", "", text)))
+    unsupported = names - set(ALLOWED)
     if unsupported:
-        raise ValueError("Unsupported name(s): " + ", ".join(sorted(unsupported)) +
-                         ". Use x and standard functions such as sin, cos, exp, log, sqrt, and abs.")
+        raise ValueError("Unsupported name(s): " + ", ".join(sorted(unsupported)) + ". Use x and supported functions such as sin, log, sqrt, and abs.")
     try:
         expr = parse_expr(text, local_dict=ALLOWED.copy(), transformations=TRANSFORMS,
-                          evaluate=True, global_dict={"__builtins__": {}, "Integer": sp.Integer,
-                          "Float": sp.Float, "Rational": sp.Rational, "Symbol": sp.Symbol,
-                          "Function": sp.Function, "Add": sp.Add, "Mul": sp.Mul, "Pow": sp.Pow})
+                          evaluate=True, global_dict=GLOBALS)
     except Exception as exc:
         raise ValueError(f"Could not parse expression: {exc}") from exc
     if expr.free_symbols - {X}:
         raise ValueError("Only the variable x is supported in equations.")
-    if expr.has(sp.Derivative, sp.Integral, sp.Lambda):
-        raise ValueError("Derivative, Integral, and Lambda expressions are not accepted as input.")
+    return expr
+
+
+def _condition(condition: str) -> sp.logic.boolalg.Boolean:
+    condition = _normalize(condition)
+    parts = re.split(r"\s+or\s+", condition, flags=re.I)
+    if len(parts) > 1:
+        return sp.Or(*(_condition(part) for part in parts))
+    parts = re.split(r"\s+and\s+", condition, flags=re.I)
+    if len(parts) > 1:
+        return sp.And(*(_condition(part) for part in parts))
+    # Convert chained comparisons into conjunctions before parsing.
+    chain = re.fullmatch(r"\s*(.+?)\s*(<=|<)\s*x\s*(<=|<)\s*(.+?)\s*", condition)
+    if chain:
+        lo, lop, hip, hi = chain.groups()
+        lower, upper = _sympy(lo), _sympy(hi)
+        return sp.And(X <= upper if hip == "<=" else X < upper,
+                      X >= lower if lop == "<=" else X > lower)
+    single = re.fullmatch(r"\s*x\s*(<=|>=|!=|<|>)\s*(.+?)\s*", condition)
+    if single:
+        op, rhs = single.groups()
+        value = _sympy(rhs)
+        return {"<": sp.Lt, "<=": sp.Le, ">": sp.Gt, ">=": sp.Ge, "!=": sp.Ne}[op](X, value)
+    # Inequality parsing is safe after validating the restricted token alphabet.
+    condition = condition.replace("!=", " != ")
+    try:
+        result = parse_expr(condition, local_dict=ALLOWED.copy(), transformations=TRANSFORMS,
+                            evaluate=True, global_dict=GLOBALS)
+    except Exception as exc:
+        raise ValueError("Invalid domain restriction. Use conditions such as {x < -1} or {-1 <= x <= 2}.") from exc
+    if not isinstance(result, (sp.logic.boolalg.Boolean, sp.core.relational.Relational)):
+        raise ValueError("A domain restriction must compare x with a number or expression.")
+    if result.free_symbols - {X}:
+        raise ValueError("Only x is supported in domain restrictions.")
+    return result
+
+
+def parse_expression(source: str) -> sp.Expr:
+    text = _normalize(source)
+    # Extract one trailing brace restriction; braces inside the formula are not accepted.
+    match = re.search(r"\{([^{}]*)\}\s*$", text)
+    restriction = None
+    if match and re.search(r"(?:<=|>=|!=|<|>)", match.group(1)):
+        restriction = match.group(1)
+        text = text[:match.start()].strip()
+    # Labels on explicit functions, e.g. y1=, y=, f(x)=.
+    equality = re.match(r"^\s*([A-Za-z]\w*(?:\s*\(\s*x\s*\))?)\s*=\s*(.+)$", text)
+    if equality:
+        left, right = equality.groups()
+        if re.fullmatch(r"(?:y\d*|[fgh]\s*\(\s*x\s*\))", left.strip(), re.I):
+            text = right
+    expr = _sympy(text)
+    if isinstance(expr, sp.core.relational.Relational):
+        raise ValueError("Enter a function of x, such as y = x^2. Put inequalities inside braces as a domain restriction.")
+    if restriction is not None:
+        expr = sp.Piecewise((expr, _condition(restriction)), (sp.nan, True))
     return expr
 
 
@@ -120,10 +148,14 @@ def parse_text(source: str) -> ParsedInput:
         if len(points) < 2:
             raise ValueError("At least two coordinate points are required.")
         return ParsedInput("points", [], [], points)
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    lines = [line.strip() for line in re.split(r"[\n;]+", text) if line.strip()]
+    if len(lines) == 1:
+        # Commas are separators only when the right side clearly starts another equation.
+        lines = [part.strip() for part in re.split(r",\s*(?=(?:y\d*|[fgh]\s*\(\s*x\s*\))\s*=)", lines[0]) if part.strip()]
+    if len(lines) > 20:
+        raise ValueError("Plot at most 20 equations at a time.")
     expressions, labels = [], []
     for line in lines:
-        expr = parse_expression(line)
-        expressions.append(expr)
+        expressions.append(parse_expression(line))
         labels.append(line)
     return ParsedInput("equations", expressions, labels, [])

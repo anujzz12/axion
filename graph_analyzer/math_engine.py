@@ -9,10 +9,23 @@ from .parser import X
 
 
 def _finite_eval(expr, values):
-    fn = sp.lambdify(X, expr, modules=["numpy"])
-    with np.errstate(all="ignore"):
-        result = np.asarray(fn(values), dtype=float)
-    return np.broadcast_to(result, np.shape(values)).astype(float)
+    try:
+        fn = sp.lambdify(X, expr, modules=["numpy"])
+        with np.errstate(all="ignore"):
+            result = np.asarray(fn(values), dtype=float)
+        return np.broadcast_to(result, np.shape(values)).astype(float)
+    except (TypeError, ValueError, NameError, NotImplementedError):
+        # Some valid SymPy derivatives (floor, ceiling, real cube roots) do not
+        # have NumPy lambdify implementations. Fall back to pointwise numeric
+        # evaluation and mark unsupported points as undefined.
+        scalar = sp.lambdify(X, expr, modules=["math", {"ceiling": np.ceil, "floor": np.floor}])
+        output = np.full(np.shape(values), np.nan, dtype=float)
+        for index, value in np.ndenumerate(np.asarray(values)):
+            try:
+                output[index] = float(scalar(float(value)))
+            except (ArithmeticError, TypeError, ValueError, OverflowError, NameError):
+                continue
+        return output
 
 
 def analyze(expr: sp.Expr, xmin: float, xmax: float, samples: int = 1600) -> dict:
@@ -20,7 +33,10 @@ def analyze(expr: sp.Expr, xmin: float, xmax: float, samples: int = 1600) -> dic
     ys = _finite_eval(expr, xs)
     valid = np.isfinite(ys)
     deriv = sp.diff(expr, X)
-    dydx = _finite_eval(deriv, xs)
+    try:
+        dydx = _finite_eval(deriv, xs)
+    except Exception:
+        dydx = np.gradient(ys, xs)
     roots = []
     try:
         for root in sp.solve(expr, X):
@@ -43,7 +59,7 @@ def analyze(expr: sp.Expr, xmin: float, xmax: float, samples: int = 1600) -> dic
                    {"kind": "sampled maximum", "x": float(xs[imax]), "y": float(ys[imax])}]
     critical = []
     dvalid = np.isfinite(dydx)
-    for i in range(samples - 1):
+    for i in range(samples - 1) if not deriv.has(sp.Derivative) else ():
         if dvalid[i] and dvalid[i + 1] and dydx[i] * dydx[i + 1] < 0:
             try:
                 cx = brentq(lambda t: float(_finite_eval(deriv, np.array([t]))[0]), xs[i], xs[i + 1])

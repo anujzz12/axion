@@ -101,7 +101,7 @@ Contributions, suggestions and feedback are welcome.
 Built with Python.
 
 
-## Preview
+## Preview(v1.0.0)
 
 ### 1. Mathematical Graph Plotting
 Plot mathematical equations and explore interactive visualizations with automatic mathematical analysis.
