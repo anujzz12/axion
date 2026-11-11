@@ -99,3 +99,18 @@ Contributions, suggestions and feedback are welcome.
 **AXION — Beyond Equations. Into Insights.**
 
 Built with Python.
+
+
+## Preview
+
+### 1. Mathematical Graph Plotting
+Plot mathematical equations and explore interactive visualizations with automatic mathematical analysis.
+
+ ![ex1](assets/ex1.png)
+
+### 2. Scientific Data Analysis
+Upload experimental datasets, generate graphs, and explore regression, statistical calculations, and analytical results.
+
+<p align="center">
+  <img src="assets/data-analysis.png" width="85%" alt="AXION Scientific Data Analysis">
+</p>
