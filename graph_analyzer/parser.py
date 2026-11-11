@@ -13,7 +13,7 @@ TRANSFORMS = standard_transformations + (implicit_multiplication_application, co
 ALLOWED = {name: getattr(sp, name) for name in (
     "sin cos tan asin acos atan sinh cosh tanh exp log sqrt Abs pi E".split()
 )}
-ALLOWED.update({"abs": sp.Abs, "x": X})
+ALLOWED.update({"abs": sp.Abs, "log": sp.log, "ln": sp.log, "x": X})
 
 
 @dataclass
@@ -25,7 +25,35 @@ class ParsedInput:
 
 
 def parse_expression(source: str) -> sp.Expr:
-    text = source.strip().replace("−", "-")
+    text = source.strip().replace("−", "-").replace("²", "^2").replace("³", "^3")
+    # Normalize common LaTeX commands used when copying equations.
+    text = (text.replace(r"\left", "").replace(r"\right", "")
+            .replace(r"\ln", "log").replace(r"\sin", "sin")
+            .replace(r"\cos", "cos").replace(r"\tan", "tan")
+            .replace(r"\cdot", "*").replace(r"\times", "*")
+            .replace(r"\leq", "<=").replace(r"\le", "<=")
+            .replace(r"\geq", ">=").replace(r"\ge", ">="))
+    text = re.sub(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"((\1)/(\2))", text)
+    domain = re.search(r"\{\s*(.*?)\s*\}\s*$", text)
+    if domain and re.search(r"\bx\b", domain.group(1)) and re.search(r"<=|>=|<|>", domain.group(1)):
+        condition = domain.group(1)
+        body = text[:domain.start()].strip()
+        chain = re.fullmatch(r"(-?\d+(?:\.\d+)?)\s*(<=|<)\s*x\s*(<=|<)\s*(-?\d+(?:\.\d+)?)", condition)
+        if chain:
+            lo, lop, hip, hi = chain.groups()
+            test = sp.And(X >= float(lo) if lop == "<=" else X > float(lo),
+                          X <= float(hi) if hip == "<=" else X < float(hi))
+        else:
+            test = None
+            for op, rel in (("<=", sp.Le), (">=", sp.Ge), ("<", sp.Lt), (">", sp.Gt)):
+                match = re.fullmatch(rf"x\s*{re.escape(op)}\s*(-?\d+(?:\.\d+)?)", condition)
+                if match:
+                    test = rel(X, float(match.group(1)))
+                    break
+            if test is None:
+                raise ValueError("Use restrictions like {x < -1}, {-1 <= x <= 2}, or {x > 2}.")
+        return sp.Piecewise((parse_expression(body), test), (sp.nan, True))
+    text = text.replace("{", "(").replace("}", ")")
     if not text:
         raise ValueError("Enter an equation or expression.")
     if "=" in text:
