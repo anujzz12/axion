@@ -110,7 +110,5 @@ Plot mathematical equations and explore interactive visualizations with automati
 
 ### 2. Scientific Data Analysis
 Upload experimental datasets, generate graphs, and explore regression, statistical calculations, and analytical results.
-
-<p align="center">
-  <img src="assets/data-analysis.png" width="85%" alt="AXION Scientific Data Analysis">
-</p>
+ 
+  ![ex2](assets/ex2.png)
