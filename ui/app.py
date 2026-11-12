@@ -114,7 +114,7 @@ with graph_col:
         else:
             frame = result["frame"]
             info = inspect_dataset(frame)
-            chart_options = []
+            chart_options: list[str] = []
             if info["dates"]:
                 chart_options.append("Line")
             if info["categorical"]:
@@ -127,10 +127,11 @@ with graph_col:
                 chart_options.extend(["Histogram", "Box"])
             chart_options = list(dict.fromkeys(chart_options))
             suggested = recommend_chart(info)
-            default_chart = suggested if suggested in chart_options else chart_options[0]
+            default_chart: str = suggested if suggested in chart_options else chart_options[0]
             signature = str(abs(hash((tuple(map(str, frame.columns)), tuple(map(str, info["numeric"])),
                                       tuple(map(str, info["dates"])), tuple(map(str, info["categorical"]))))))
-            chart = st.selectbox("Chart", chart_options, index=chart_options.index(default_chart), key=f"dataset_chart_{signature}")
+            selected_chart = st.selectbox("Chart", chart_options, index=chart_options.index(default_chart), key=f"dataset_chart_{signature}")
+            chart: str = str(selected_chart if selected_chart is not None else default_chart)
 
             xname = yname = colorname = zname = None
             if chart in ("Line", "Scatter", "Bar", "Box", "Pie", "3D scatter"):
