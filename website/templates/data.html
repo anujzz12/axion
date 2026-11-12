@@ -18,12 +18,12 @@
 
             <div id="paste-section" class="field">
                 <label for="paste-input">Paste table or coordinate pairs</label>
-                <textarea id="paste-input" rows="6" placeholder="x,y&#10;1,2&#10;2,5&#10;3,8&#10;4,13&#10;5,21" spellcheck="false">x,y
-1,2
-2,5
-3,8
-4,13
-5,21</textarea>
+                <textarea id="paste-input" rows="6" placeholder="date,category,value,count&#10;2026-01-01,Alpha,42,15&#10;2026-01-02,Beta,28,9&#10;2026-01-03,Alpha,35,12&#10;2026-01-04,Gamma,50,22&#10;2026-01-05,Beta,46,18" spellcheck="false">date,category,value,count
+2026-01-01,Alpha,42,15
+2026-01-02,Beta,28,9
+2026-01-03,Alpha,35,12
+2026-01-04,Gamma,50,22
+2026-01-05,Beta,46,18</textarea>
                 <span class="hint">Delimited by commas, tabs, spaces, or coordinate pairs like (1, 2), (2, 4).</span>
             </div>
 
@@ -224,11 +224,29 @@
     function populateChartOptions(info) {
         chartTypeSelect.innerHTML = "";
         const available = [];
-        if (info.dates && info.dates.length) available.push("Line");
-        if (info.categorical && info.categorical.length) available.push("Bar", "Pie");
-        if (info.numeric && info.numeric.length >= 2) available.push("Scatter", "Correlation");
-        if (info.numeric && info.numeric.length >= 3) available.push("3D scatter");
-        if (info.numeric && info.numeric.length >= 1) available.push("Histogram", "Box");
+
+        // line
+        if ((info.dates && info.dates.length) || (info.numeric && info.numeric.length)) {
+            available.push("Line");
+        }
+
+        // bar & pie
+        available.push("Bar", "Pie");
+
+        // scatter and ccorrelation
+        if (info.numeric && info.numeric.length >= 2) {
+            available.push("Scatter", "Correlation");
+        }
+
+        // 3D scatter
+        if (info.numeric && info.numeric.length >= 3) {
+            available.push("3D scatter");
+        }
+
+        // histogram and bx
+        if (info.numeric && info.numeric.length >= 1) {
+            available.push("Histogram", "Box");
+        }
 
         const unique = [...new Set(available)];
         unique.forEach(type => {
@@ -250,7 +268,7 @@
         const info = datasetPayload.info;
         const chart = chartTypeSelect.value;
 
-        // reeset
+        // reset
         xColWrap.hidden = false;
         yColWrap.hidden = false;
         colorColWrap.hidden = true;
@@ -268,6 +286,9 @@
                 select.appendChild(opt);
             });
         };
+
+        const allColumns = [...info.dates, ...info.categorical, ...info.numeric];
+        const categoryOptions = info.categorical.length ? [...info.categorical, ...info.numeric] : (allColumns.length ? allColumns : info.numeric);
 
         if (chart === "Line") {
             addOptions(xColSelect, [...info.dates, ...info.numeric, ...info.categorical]);
@@ -296,7 +317,7 @@
                 addOptions(colorColSelect, info.categorical);
             }
         } else if (chart === "Bar" || chart === "Pie") {
-            addOptions(xColSelect, info.categorical.length ? info.categorical : info.numeric);
+            addOptions(xColSelect, categoryOptions);
             addOptions(yColSelect, ["Count / frequency", ...info.numeric]);
         } else if (chart === "Histogram") {
             addOptions(xColSelect, info.numeric);
@@ -306,7 +327,7 @@
                 addOptions(colorColSelect, info.categorical);
             }
         } else if (chart === "Box") {
-            addOptions(xColSelect, ["All values", ...info.categorical]);
+            addOptions(xColSelect, ["All values", ...categoryOptions]);
             addOptions(yColSelect, info.numeric);
         } else if (chart === "Correlation") {
             xColWrap.hidden = true;
