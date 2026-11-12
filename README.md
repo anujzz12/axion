@@ -24,7 +24,7 @@ The idea is simple: spend less time manually plotting graphs and more time under
 | Technology | Purpose |
 |---|---|
 | Python | Core programming |
-| Streamlit | User interface |
+| Flask | Web framework & routing |
 | SymPy | Symbolic mathematics |
 | NumPy & SciPy | Numerical computation |
 | Pandas | Data processing |
@@ -35,8 +35,8 @@ The idea is simple: spend less time manually plotting graphs and more time under
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Shuvamm939-glitch/GRAPH.git
-cd GRAPH
+git clone https://github.com/Shuvamm939-glitch/AXION.git
+cd AXION
 ```
 
 ### 2. Create a virtual environment
@@ -62,15 +62,15 @@ python -m pip install -r requirements.txt
 ### 4. Run AXION
 
 ```bash
-python -m streamlit run ui/app.py
+python main.py
 ```
 
-The application will open in your browser.
+The application will start on `http://127.0.0.1:5000/`.
 
 ## Project Structure
 
 ```text
-GRAPH/
+axion/
 ├── graph_analyzer/
 │   ├── analysis.py
 │   ├── data_engine.py
@@ -78,8 +78,17 @@ GRAPH/
 │   ├── math_engine.py
 │   ├── parser.py
 │   └── plotting.py
-├── ui/
-│   └── app.py
+├── website/
+│   ├── static/
+│   │   ├── style.css
+│   │   ├── theme.css
+│   │   └── graph.js
+│   └── templates/
+│       ├── base.html
+│       ├── home.html
+│       ├── functions.html
+│       └── data.html
+├── main.py
 ├── requirements.txt
 └── README.md
 ```
@@ -88,20 +97,15 @@ GRAPH/
 
 AXION uses symbolic and numerical methods depending on the problem. Some results, such as roots, extrema and areas, may be approximations calculated over the selected graph range. These limitations are important, especially when working with scientific or experimental data.
 
-## What's Next?
+---
 
-AXION is an evolving project. The goal is to expand its mathematical capabilities, improve automatic graph detection, introduce more scientific visualization tools and make complex analysis easier to understand.
-
-Contributions, suggestions and feedback are welcome.
+Built with Python by **shuvamm939-glitch** and **anujzz12**.
 
 ---
 
-**AXION — Beyond Equations. Into Insights.**
+# Preview
 
-Built with Python.
-
-
-## Preview(v1.0.0)
+## v1.0.0
 
 ### 1. Mathematical Graph Plotting
 Plot mathematical equations and explore interactive visualizations with automatic mathematical analysis.
@@ -112,3 +116,12 @@ Plot mathematical equations and explore interactive visualizations with automati
 Upload experimental datasets, generate graphs, and explore regression, statistical calculations, and analytical results.
  
   ![ex2](assets/ex2.png)
+
+## v1.1.0
+
+feat! : Migrated web framework from streamlit to Flask.
+
+![1](assets/1.png)
+![2](assets/2.png)
+![3](assets/3.png)
+![4](assets/4.png)

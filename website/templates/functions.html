@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+
+{% block title %}Function Plotter - AXION{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Function plotter</h1>
+</div>
+
+<div class="axion-layout">
+    <div class="side-panel">
+        <div class="device">
+            <form id="function-form" class="fields">
+                <div class="field">
+                    <label for="eq-input">Equation(s)</label>
+                    <textarea id="eq-input" rows="3" placeholder="y = x^2 - 4" spellcheck="false" required>y = x^2 - 4</textarea>
+                    <span class="hint">Use x as the variable. One equation per line or separated by semicolons.</span>
+                    
+                    <div class="chips" aria-label="Quick insert formulas">
+                        <button type="button" class="chip" data-insert="sin(x)">sin(x)</button>
+                        <button type="button" class="chip" data-insert="cos(x)">cos(x)</button>
+                        <button type="button" class="chip" data-insert="x^2">x&sup2;</button>
+                        <button type="button" class="chip" data-insert="sqrt(x)">&radic;x</button>
+                        <button type="button" class="chip" data-insert="ln(x)">ln(x)</button>
+                        <button type="button" class="chip" data-insert="e^x">e<sup>x</sup></button>
+                        <button type="button" class="chip" data-insert="abs(x)">|x|</button>
+                        <button type="button" class="chip" data-insert=" {x >= 0}">{x &ge; 0}</button>
+                    </div>
+                </div>
+
+                <div class="pair">
+                    <div class="field">
+                        <label for="xmin-input">X min</label>
+                        <input type="number" id="xmin-input" value="-10" step="any" required>
+                    </div>
+                    <div class="field">
+                        <label for="xmax-input">X max</label>
+                        <input type="number" id="xmax-input" value="10" step="any" required>
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button type="submit" id="submit-btn" class="btn primary" style="flex: 1;">Plot function</button>
+                    <button type="button" id="clear-btn" class="btn quiet">Clear</button>
+                </div>
+            </form>
+        </div>
+
+
+{# lcd #}
+        <div class="device" id="analysis-card">
+            <div class="screen">
+                <div class="meta">
+                    <span>MATHEMATICAL ANALYSIS</span>
+                    <span id="range-badge">[-10, 10]</span>
+                </div>
+
+                <div id="equation-subtabs" class="subtabs" hidden></div>
+
+                <div id="math-readout" class="math-readout">
+                    <div class="math-stat-row">
+                        <span>Function</span>
+                        <b id="readout-func">y = x^2 - 4</b>
+                    </div>
+                    <div class="math-stat-row">
+                        <span>Derivative f'(x)</span>
+                        <b id="readout-deriv">2*x</b>
+                    </div>
+                    <div class="math-stat-row">
+                        <span>Roots in range</span>
+                        <b id="readout-roots">-2, 2</b>
+                    </div>
+                    <div class="math-stat-row">
+                        <span>Y-intercept</span>
+                        <b id="readout-yint">(0, -4)</b>
+                    </div>
+                    <div class="math-stat-row">
+                        <span>Extrema</span>
+                        <b id="readout-extrema">min at (0, -4)</b>
+                    </div>
+                    <div class="math-stat-row">
+                        <span>Critical points</span>
+                        <b id="readout-critical">&mdash;</b>
+                    </div>
+                    <div class="math-stat-row">
+                        <span>Approx. Area</span>
+                        <b id="readout-area">&mdash;</b>
+                    </div>
+                </div>
+
+                <div id="range-caption" style="margin-top: 14px; font-size: 0.8rem; opacity: 0.75; line-height: 1.4;">
+                    Range checked: x = -10 to 10. Approximate extrema, critical points, and area use numerical samples.
+                </div>
+
+                <details class="calc-details" style="margin-top: 14px; font-size: 0.85rem; border-top: 1px solid rgba(35, 38, 34, .15); padding-top: 10px;">
+                    <summary style="cursor: pointer; font-weight: 600; opacity: 0.85;">Calculation details</summary>
+                    <p style="margin: 8px 0 0; line-height: 1.5; opacity: 0.8;">
+                        The derivative is calculated symbolically. Roots are found symbolically where possible, then checked numerically for sign changes via Brent's method. Extrema and signed area are estimated over the selected range.
+                    </p>
+                </details>
+            </div>
+        </div>
+
+
+        <div class="device history">
+            <div class="history-head">
+                <h3>Recent equations</h3>
+                <button type="button" id="clear-history" class="btn quiet small">Clear</button>
+            </div>
+            <ul id="history-list">
+            </ul>
+        </div>
+    </div>
+
+
+    <div class="device">
+        <div class="graph-topbar">
+            <h2 class="graph-title">Visualization</h2>
+            <div class="btn-row">
+                <button type="button" id="download-csv-btn" class="btn quiet small">Export CSV</button>
+                <button type="button" id="download-html-btn" class="btn quiet small">Export HTML</button>
+            </div>
+        </div>
+
+        <div id="error-alert" class="alert error" hidden></div>
+        <div id="plot-viewport" class="graph-viewport"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const form = document.getElementById("function-form");
+    const eqInput = document.getElementById("eq-input");
+    const xminInput = document.getElementById("xmin-input");
+    const xmaxInput = document.getElementById("xmax-input");
+    const submitBtn = document.getElementById("submit-btn");
+    const clearBtn = document.getElementById("clear-btn");
+    const errorAlert = document.getElementById("error-alert");
+    const historyList = document.getElementById("history-list");
+    const clearHistoryBtn = document.getElementById("clear-history");
+    const subtabs = document.getElementById("equation-subtabs");
+
+    let currentSeries = [];
+    let currentCsv = "";
+    let currentFigure = null;
+
+    // loading history from localStorage
+    function loadHistory() {
+        let history = [];
+        try { history = JSON.parse(localStorage.getItem("axion_func_history") || "[]"); } catch(e){}
+        historyList.innerHTML = "";
+        if (!history.length) {
+            historyList.innerHTML = '<li style="font-size:0.85rem; color:var(--ink-soft); padding:8px 10px;">No recent equations yet.</li>';
+            return;
+        }
+        history.forEach(item => {
+            const li = document.createElement("li");
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = item;
+            btn.title = item;
+            btn.addEventListener("click", () => {
+                eqInput.value = item;
+                plot();
+            });
+            li.appendChild(btn);
+            historyList.appendChild(li);
+        });
+    }
+
+    function saveHistory(expr) {
+        let history = [];
+        try { history = JSON.parse(localStorage.getItem("axion_func_history") || "[]"); } catch(e){}
+        history = [expr, ...history.filter(h => h !== expr)].slice(0, 8);
+        try { localStorage.setItem("axion_func_history", JSON.stringify(history)); } catch(e){}
+        loadHistory();
+    }
+
+
+
+    document.querySelectorAll(".chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+            const text = chip.dataset.insert;
+            if (eqInput.value.trim() === "y = x^2 - 4") {
+                eqInput.value = (text.startsWith(" ") || text.startsWith("{")) ? "y = x^2" + text : "y = " + text;
+            } else {
+                eqInput.value += (text.startsWith(" ") ? text : " " + text);
+            }
+            eqInput.focus();
+        });
+    });
+
+
+
+    function showAnalysis(analysis) {
+        if (!analysis) return;
+        document.getElementById("readout-func").textContent = analysis.label;
+        document.getElementById("readout-deriv").textContent = analysis.derivative || "—";
+        document.getElementById("readout-roots").textContent = (analysis.roots && analysis.roots.length) 
+            ? analysis.roots.map(r => Number(r.toFixed(4))).join(", ") : "None in range";
+        document.getElementById("readout-yint").textContent = (analysis.y_intercept !== null && analysis.y_intercept !== undefined)
+            ? `(0, ${Number(analysis.y_intercept.toFixed(4))})` : "Undefined";
+        
+        let extremaStr = "None";
+        if (analysis.extrema && analysis.extrema.length) {
+            extremaStr = analysis.extrema.map(e => `${e.kind}: (${Number(e.x.toFixed(2))}, ${Number(e.y.toFixed(2))})`).join(" | ");
+        }
+        document.getElementById("readout-extrema").textContent = extremaStr;
+
+        let critStr = "None";
+        if (analysis.critical_points && analysis.critical_points.length) {
+            critStr = analysis.critical_points.map(c => `(${Number(c.x.toFixed(2))}, ${Number(c.y.toFixed(2))})`).join(", ");
+        }
+        document.getElementById("readout-critical").textContent = critStr;
+
+        document.getElementById("readout-area").textContent = (analysis.area !== null && analysis.area !== undefined)
+            ? Number(analysis.area.toFixed(4)) : "Undefined / discontinuous";
+    }
+
+    async function plot() {
+        const expression = eqInput.value.trim();
+        const xmin = parseFloat(xminInput.value);
+        const xmax = parseFloat(xmaxInput.value);
+
+        if (!expression) {
+            errorAlert.textContent = "Please enter at least one equation.";
+            errorAlert.hidden = false;
+            return;
+        }
+        if (isNaN(xmin) || isNaN(xmax) || xmin >= xmax) {
+            errorAlert.textContent = "X minimum must be strictly less than X maximum.";
+            errorAlert.hidden = false;
+            return;
+        }
+
+        errorAlert.hidden = true;
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Plotting...";
+
+        try {
+            const resp = await fetch("{{ url_for('api_plot_function') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ expression, xmin, xmax })
+            });
+            const data = await resp.json();
+
+            if (!data.ok) {
+                errorAlert.textContent = data.error || "Could not plot the function.";
+                errorAlert.hidden = false;
+                return;
+            }
+
+            currentSeries = data.series || [];
+            currentCsv = data.csv || "";
+            currentFigure = data.figure;
+
+            document.getElementById("range-badge").textContent = `[${xmin}, ${xmax}]`;
+            document.getElementById("range-caption").textContent = `Range checked: x = ${xmin} to ${xmax}. Approximate extrema, critical points, and area use numerical samples.`;
+
+
+
+            subtabs.innerHTML = "";
+            if (currentSeries.length > 1) {
+                subtabs.hidden = false;
+                currentSeries.forEach((item, idx) => {
+                    const tabBtn = document.createElement("button");
+                    tabBtn.type = "button";
+                    tabBtn.className = "subtab";
+                    tabBtn.setAttribute("aria-selected", idx === 0 ? "true" : "false");
+                    tabBtn.textContent = item.label;
+                    tabBtn.addEventListener("click", () => {
+                        subtabs.querySelectorAll(".subtab").forEach(t => t.setAttribute("aria-selected", "false"));
+                        tabBtn.setAttribute("aria-selected", "true");
+                        showAnalysis(item);
+                    });
+                    subtabs.appendChild(tabBtn);
+                });
+            } else {
+                subtabs.hidden = true;
+            }
+
+            if (currentSeries.length) showAnalysis(currentSeries[0]);
+
+            // render plotly figure
+            window.renderPlot("plot-viewport", data.figure);
+            saveHistory(expression);
+
+        } catch (err) {
+            errorAlert.textContent = "An error occurred while connecting to the server: " + err.message;
+            errorAlert.hidden = false;
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Plot function";
+        }
+    }
+
+    form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        plot();
+    });
+
+    clearBtn.addEventListener("click", () => {
+        eqInput.value = "";
+        eqInput.focus();
+    });
+
+    clearHistoryBtn.addEventListener("click", () => {
+        try { localStorage.removeItem("axion_func_history"); } catch(e){}
+        loadHistory();
+    });
+
+    document.getElementById("download-csv-btn").addEventListener("click", () => {
+        if (!currentCsv) return alert("Please plot a function first.");
+        window.downloadBlob(currentCsv, "axion_graph_data.csv", "text/csv");
+    });
+
+    document.getElementById("download-html-btn").addEventListener("click", () => {
+        if (!currentFigure) return alert("Please plot a function first.");
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>AXION Plot</title><script src="https://cdn.plot.ly/plotly-2.35.2.min.js"><\/script></head><body style="margin:0;padding:20px;background:#151617;"><div id="plot" style="width:100%;height:90vh;"></div><script>Plotly.newPlot('plot', ${JSON.stringify(currentFigure.data)}, ${JSON.stringify(currentFigure.layout)}, {responsive:true});<\/script></body></html>`;
+        window.downloadBlob(html, "axion_graph.html", "text/html");
+    });
+
+    loadHistory();
+    plot();
+})();
+</script>
+{% endblock %}

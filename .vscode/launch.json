@@ -1,13 +1,14 @@
 {
-  "version": "0.2.0",
+  "version": "1.1.0",
   "configurations": [
     {
-      "name": "Run Graph Analyzer (Streamlit)",
+      "name": "Run AXION (Flask)",
       "type": "debugpy",
       "request": "launch",
-      "module": "streamlit",
-      "args": ["run", "${workspaceFolder}/ui/app.py"],
+      "program": "${workspaceFolder}/main.py",
       "console": "integratedTerminal"
     }
   ]
 }
+
+// version number 1.0.0 -> 1.1.0

@@ -11,8 +11,16 @@ import pandas as pd
 
 
 def load_upload(upload) -> pd.DataFrame:
-    name = upload.name.lower()
-    raw = upload.getvalue()
+    filename = getattr(upload, "filename", None) or getattr(upload, "name", "")
+    name = str(filename).lower()
+    if hasattr(upload, "read"):
+        raw = upload.read()
+        if hasattr(upload, "seek"):
+            upload.seek(0)
+    elif hasattr(upload, "getvalue"):
+        raw = upload.getvalue()
+    else:
+        raise ValueError("Unsupported upload stream.")
     if name.endswith(".csv"):
         frame = pd.read_csv(BytesIO(raw))
     elif name.endswith(".tsv"):
