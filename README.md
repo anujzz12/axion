@@ -99,6 +99,29 @@ AXION uses symbolic and numerical methods depending on the problem. Some results
 
 ---
 
-**AXION - Beyond Equations. Into Insights.**
-
 Built with Python by **shuvamm939-glitch** and **anujzz12**.
+
+---
+
+# Preview
+
+## v1.0.0
+
+### 1. Mathematical Graph Plotting
+Plot mathematical equations and explore interactive visualizations with automatic mathematical analysis.
+
+ ![ex1](assets/ex1.png)
+
+### 2. Scientific Data Analysis
+Upload experimental datasets, generate graphs, and explore regression, statistical calculations, and analytical results.
+ 
+  ![ex2](assets/ex2.png)
+
+## v1.1.0
+
+feat! : Migrated web framework from streamlit to Flask.
+
+![1](assets/1.png)
+![2](assets/2.png)
+![3](assets/3.png)
+![4](assets/4.png)
