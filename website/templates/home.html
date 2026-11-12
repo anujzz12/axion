@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}AXION{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>AXION</h1>
+</section>
+
+<section class="choices">
+    <a class="choice func" href="{{ url_for('functions') }}">
+        <div>
+            <h2>Function plotter</h2>
+            <p>Plot linear, trigonometric, polynomial, exponential, and piecewise functions with automatic calculus analysis.</p>
+        </div>
+        <div>
+            <div class="peek-formula" aria-hidden="true">
+                y = x<sup>2</sup> - 4
+                <small>roots: &plusmn;2 &bull; f'(x) = 2x &bull; min at (0, -4)</small>
+            </div>
+            <span class="go">Open</span>
+        </div>
+    </a>
+
+    <a class="choice data" href="{{ url_for('data') }}">
+        <div>
+            <h2>Scientific data analysis</h2>
+            <p>Upload CSV, Excel, or JSON files. Auto-detect data types, correlations, statistics, and explore interactive charts.</p>
+        </div>
+        <div>
+            <div class="peek-charts" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <span class="go">Open</span>
+        </div>
+    </a>
+</section>
+{% endblock %}

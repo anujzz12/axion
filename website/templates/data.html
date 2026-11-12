@@ -1,0 +1,515 @@
+{% extends "base.html" %}
+
+{% block title %}Scientific Data Analysis - AXION{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>Scientific data analysis</h1>
+</div>
+
+<div class="axion-data-layout">
+    <div class="device">
+        <form id="data-form" class="fields" enctype="multipart/form-data">
+            <div class="tabs" style="align-self: flex-start; margin-bottom: 6px;">
+                <button type="button" id="tab-paste" class="subtab" aria-selected="true">Paste values</button>
+                <button type="button" id="tab-upload" class="subtab" aria-selected="false">Upload file</button>
+            </div>
+
+
+            <div id="paste-section" class="field">
+                <label for="paste-input">Paste table or coordinate pairs</label>
+                <textarea id="paste-input" rows="6" placeholder="x,y&#10;1,2&#10;2,5&#10;3,8&#10;4,13&#10;5,21" spellcheck="false">x,y
+1,2
+2,5
+3,8
+4,13
+5,21</textarea>
+                <span class="hint">Delimited by commas, tabs, spaces, or coordinate pairs like (1, 2), (2, 4).</span>
+            </div>
+
+
+            <div id="upload-section" class="field" hidden>
+                <label for="file-input">Choose dataset</label>
+                <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xls,.json">
+                <span class="hint">Supported formats: CSV, TSV, TXT, Excel (.xlsx, .xls), and JSON.</span>
+            </div>
+
+            <div class="btn-row">
+                <button type="submit" id="analyze-btn" class="btn primary">Analyze &amp; Plot</button>
+            </div>
+        </form>
+
+        <div id="data-error-alert" class="alert error" style="margin-top: 14px;" hidden></div>
+    </div>
+
+
+    <div id="results-device" class="device" hidden>
+        <div class="graph-topbar">
+            <h2 class="graph-title">Chart Explorer</h2>
+            <div class="btn-row">
+                <button type="button" id="export-csv-btn" class="btn quiet small">Export CSV</button>
+                <button type="button" id="export-html-btn" class="btn quiet small">Export HTML</button>
+            </div>
+        </div>
+
+
+{# toolbar #}
+        <div class="fields" style="margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--key-edge);">
+            <div class="triplet">
+                <div class="field">
+                    <label for="chart-type-select">Chart type</label>
+                    <select id="chart-type-select"></select>
+                </div>
+                <div class="field" id="x-col-wrap">
+                    <label for="x-col-select" id="x-col-label">X axis / Category</label>
+                    <select id="x-col-select"></select>
+                </div>
+                <div class="field" id="y-col-wrap">
+                    <label for="y-col-select" id="y-col-label">Y axis / Value</label>
+                    <select id="y-col-select"></select>
+                </div>
+            </div>
+
+            <div class="pair">
+                <div class="field" id="color-col-wrap" hidden>
+                    <label for="color-col-select">Group by (color)</label>
+                    <select id="color-col-select"></select>
+                </div>
+                <div class="field" id="z-col-wrap" hidden>
+                    <label for="z-col-select">Z axis (3D)</label>
+                    <select id="z-col-select"></select>
+                </div>
+            </div>
+        </div>
+
+
+
+        <div id="data-plot-viewport" class="graph-viewport"></div>
+
+
+
+        <div style="margin-top: 28px;">
+            <h3 style="margin: 0 0 10px; font-size: 1.15rem; letter-spacing: -.02em;">Automated Data Profiling</h3>
+            <div id="prose-summary" class="data-summary-prose"></div>
+            <details style="margin-top: 8px; font-size: 0.85rem; color: var(--ink-soft); cursor: pointer;">
+                <summary style="font-weight: 600; color: var(--ink);">How the summary is calculated</summary>
+                <p style="margin: 8px 0 0; line-height: 1.5;">
+                    Column types are inferred from their values. Numeric summaries use available numeric cells; missing values are counted separately. The correlation note uses paired numeric rows and describes association only.
+                </p>
+            </details>
+        </div>
+
+
+{# summary table #}
+        <div id="numeric-summary-box" hidden>
+            <h4 style="margin: 18px 0 8px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft);">Numeric Metrics</h4>
+            <div class="data-table-wrap">
+                <table class="data-table" id="numeric-summary-table">
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Valid</th>
+                            <th>Missing</th>
+                            <th>Mean</th>
+                            <th>Median</th>
+                            <th>Std. Dev</th>
+                            <th>Min</th>
+                            <th>Max</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+
+        <div id="date-summary-box" hidden>
+            <h4 style="margin: 18px 0 8px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft);">Date and Time Columns</h4>
+            <div class="data-table-wrap">
+                <table class="data-table" id="date-summary-table">
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Valid Dates</th>
+                            <th>Missing</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+
+
+        <div id="category-summary-box" hidden>
+            <h4 style="margin: 18px 0 8px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft);">Categorical Overview</h4>
+            <div class="data-table-wrap">
+                <table class="data-table" id="category-summary-table">
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Unique Values</th>
+                            <th>Missing</th>
+                            <th>Top Frequencies</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+
+        <div id="preview-box">
+            <h4 style="margin: 18px 0 8px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft);">First 30 Rows</h4>
+            <div class="data-table-wrap">
+                <table class="data-table" id="preview-table">
+                    <thead id="preview-thead"></thead>
+                    <tbody id="preview-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const tabPaste = document.getElementById("tab-paste");
+    const tabUpload = document.getElementById("tab-upload");
+    const pasteSection = document.getElementById("paste-section");
+    const uploadSection = document.getElementById("upload-section");
+    const form = document.getElementById("data-form");
+    const pasteInput = document.getElementById("paste-input");
+    const fileInput = document.getElementById("file-input");
+    const analyzeBtn = document.getElementById("analyze-btn");
+    const errorAlert = document.getElementById("data-error-alert");
+
+    const resultsDevice = document.getElementById("results-device");
+    const chartTypeSelect = document.getElementById("chart-type-select");
+    const xColSelect = document.getElementById("x-col-select");
+    const yColSelect = document.getElementById("y-col-select");
+    const colorColSelect = document.getElementById("color-col-select");
+    const zColSelect = document.getElementById("z-col-select");
+
+    const xColWrap = document.getElementById("x-col-wrap");
+    const yColWrap = document.getElementById("y-col-wrap");
+    const colorColWrap = document.getElementById("color-col-wrap");
+    const zColWrap = document.getElementById("z-col-wrap");
+
+    let activeSource = "paste";
+    let datasetPayload = null;
+    let currentFigure = null;
+
+    tabPaste.addEventListener("click", () => {
+        activeSource = "paste";
+        tabPaste.setAttribute("aria-selected", "true");
+        tabUpload.setAttribute("aria-selected", "false");
+        pasteSection.hidden = false;
+        uploadSection.hidden = true;
+    });
+
+    tabUpload.addEventListener("click", () => {
+        activeSource = "upload";
+        tabPaste.setAttribute("aria-selected", "false");
+        tabUpload.setAttribute("aria-selected", "true");
+        pasteSection.hidden = true;
+        uploadSection.hidden = false;
+    });
+
+
+
+    function populateChartOptions(info) {
+        chartTypeSelect.innerHTML = "";
+        const available = [];
+        if (info.dates && info.dates.length) available.push("Line");
+        if (info.categorical && info.categorical.length) available.push("Bar", "Pie");
+        if (info.numeric && info.numeric.length >= 2) available.push("Scatter", "Correlation");
+        if (info.numeric && info.numeric.length >= 3) available.push("3D scatter");
+        if (info.numeric && info.numeric.length >= 1) available.push("Histogram", "Box");
+
+        const unique = [...new Set(available)];
+        unique.forEach(type => {
+            const opt = document.createElement("option");
+            opt.value = type;
+            opt.textContent = type;
+            chartTypeSelect.appendChild(opt);
+        });
+
+        if (info.recommended && unique.includes(info.recommended)) {
+            chartTypeSelect.value = info.recommended;
+        } else if (unique.length) {
+            chartTypeSelect.value = unique[0];
+        }
+    }
+
+    function updateAxisSelectors() {
+        if (!datasetPayload || !datasetPayload.info) return;
+        const info = datasetPayload.info;
+        const chart = chartTypeSelect.value;
+
+        // reeset
+        xColWrap.hidden = false;
+        yColWrap.hidden = false;
+        colorColWrap.hidden = true;
+        zColWrap.hidden = true;
+        xColSelect.innerHTML = "";
+        yColSelect.innerHTML = "";
+        colorColSelect.innerHTML = '<option value="">No grouping</option>';
+        zColSelect.innerHTML = "";
+
+        const addOptions = (select, list) => {
+            list.forEach(item => {
+                const opt = document.createElement("option");
+                opt.value = item;
+                opt.textContent = item;
+                select.appendChild(opt);
+            });
+        };
+
+        if (chart === "Line") {
+            addOptions(xColSelect, [...info.dates, ...info.numeric, ...info.categorical]);
+            addOptions(yColSelect, info.numeric.length ? info.numeric : ["Row count"]);
+            if (info.categorical.length) {
+                colorColWrap.hidden = false;
+                addOptions(colorColSelect, info.categorical);
+            }
+        } else if (chart === "Scatter") {
+            addOptions(xColSelect, info.numeric);
+            addOptions(yColSelect, info.numeric);
+            if (info.numeric.length > 1) yColSelect.selectedIndex = 1;
+            if (info.categorical.length) {
+                colorColWrap.hidden = false;
+                addOptions(colorColSelect, info.categorical);
+            }
+        } else if (chart === "3D scatter") {
+            addOptions(xColSelect, info.numeric);
+            addOptions(yColSelect, info.numeric);
+            addOptions(zColSelect, info.numeric);
+            if (info.numeric.length > 1) yColSelect.selectedIndex = 1;
+            if (info.numeric.length > 2) zColSelect.selectedIndex = 2;
+            zColWrap.hidden = false;
+            if (info.categorical.length) {
+                colorColWrap.hidden = false;
+                addOptions(colorColSelect, info.categorical);
+            }
+        } else if (chart === "Bar" || chart === "Pie") {
+            addOptions(xColSelect, info.categorical.length ? info.categorical : info.numeric);
+            addOptions(yColSelect, ["Count / frequency", ...info.numeric]);
+        } else if (chart === "Histogram") {
+            addOptions(xColSelect, info.numeric);
+            yColWrap.hidden = true;
+            if (info.categorical.length) {
+                colorColWrap.hidden = false;
+                addOptions(colorColSelect, info.categorical);
+            }
+        } else if (chart === "Box") {
+            addOptions(xColSelect, ["All values", ...info.categorical]);
+            addOptions(yColSelect, info.numeric);
+        } else if (chart === "Correlation") {
+            xColWrap.hidden = true;
+            yColWrap.hidden = true;
+        }
+    }
+
+    async function renderSelectedChart() {
+        if (!datasetPayload) return;
+        const chart = chartTypeSelect.value;
+        let xcol = xColSelect.value || null;
+        let ycol = yColSelect.value || null;
+        const colorcol = colorColSelect.value || null;
+        const thirdcol = zColSelect.value || null;
+
+        if (xcol === "All values") xcol = null;
+        if (ycol === "Count / frequency") ycol = null;
+
+        try {
+            const resp = await fetch("{{ url_for('api_render_data_chart') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    data_json: datasetPayload.raw_records,
+                    chart, xcol, ycol, colorcol, thirdcol
+                })
+            });
+            const res = await resp.json();
+            if (!res.ok) {
+                errorAlert.textContent = res.error || "Could not generate chart.";
+                errorAlert.hidden = false;
+                return;
+            }
+            errorAlert.hidden = true;
+            currentFigure = res.figure;
+            window.renderPlot("data-plot-viewport", res.figure);
+        } catch (err) {
+            errorAlert.textContent = "Error rendering chart: " + err.message;
+            errorAlert.hidden = false;
+        }
+    }
+
+    chartTypeSelect.addEventListener("change", () => {
+        updateAxisSelectors();
+        renderSelectedChart();
+    });
+
+    [xColSelect, yColSelect, colorColSelect, zColSelect].forEach(sel => {
+        sel.addEventListener("change", renderSelectedChart);
+    });
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorAlert.hidden = true;
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = "Analyzing...";
+
+        const formData = new FormData();
+        formData.append("source", activeSource);
+        if (activeSource === "paste") {
+            formData.append("pasted_text", pasteInput.value);
+        } else {
+            if (!fileInput.files.length) {
+                errorAlert.textContent = "Please select a file to upload.";
+                errorAlert.hidden = false;
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = "Analyze & Plot";
+                return;
+            }
+            formData.append("file", fileInput.files[0]);
+        }
+
+        try {
+            const resp = await fetch("{{ url_for('api_analyze_data') }}", {
+                method: "POST",
+                body: formData
+            });
+            const data = await resp.json();
+            if (!data.ok) {
+                errorAlert.textContent = data.error || "Could not analyze dataset.";
+                errorAlert.hidden = false;
+                return;
+            }
+
+            datasetPayload = data;
+            resultsDevice.hidden = false;
+            document.getElementById("prose-summary").textContent = data.info.prose;
+
+           
+           
+            const numTbody = document.querySelector("#numeric-summary-table tbody");
+            numTbody.innerHTML = "";
+            if (data.numeric_summary && data.numeric_summary.length) {
+                document.getElementById("numeric-summary-box").hidden = false;
+                data.numeric_summary.forEach(row => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><b>${row.Column}</b></td>
+                        <td>${row["Valid values"]}</td>
+                        <td>${row.Missing}</td>
+                        <td>${row.Mean !== null ? Number(row.Mean.toFixed(2)) : '—'}</td>
+                        <td>${row.Median !== null ? Number(row.Median.toFixed(2)) : '—'}</td>
+                        <td>${row["Std. dev."] !== null ? Number(row["Std. dev."].toFixed(2)) : '—'}</td>
+                        <td>${row.Minimum !== null ? Number(row.Minimum.toFixed(2)) : '—'}</td>
+                        <td>${row.Maximum !== null ? Number(row.Maximum.toFixed(2)) : '—'}</td>
+                    `;
+                    numTbody.appendChild(tr);
+                });
+            } else {
+                document.getElementById("numeric-summary-box").hidden = true;
+            }
+
+
+            const dateTbody = document.querySelector("#date-summary-table tbody");
+            dateTbody.innerHTML = "";
+            if (data.date_summary && data.date_summary.length) {
+                document.getElementById("date-summary-box").hidden = false;
+                data.date_summary.forEach(row => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><b>${row.Column}</b></td>
+                        <td>${row.Start || '—'}</td>
+                        <td>${row.End || '—'}</td>
+                        <td>${row["Valid dates"]}</td>
+                        <td>${row.Missing}</td>
+                    `;
+                    dateTbody.appendChild(tr);
+                });
+            } else {
+                document.getElementById("date-summary-box").hidden = true;
+            }
+
+
+            const catTbody = document.querySelector("#category-summary-table tbody");
+            catTbody.innerHTML = "";
+            if (data.category_summary && data.category_summary.length) {
+                document.getElementById("category-summary-box").hidden = false;
+                data.category_summary.forEach(row => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><b>${row.Column}</b></td>
+                        <td>${row["Unique values"]}</td>
+                        <td>${row.Missing}</td>
+                        <td>${row["Most common values"]}</td>
+                    `;
+                    catTbody.appendChild(tr);
+                });
+            } else {
+                document.getElementById("category-summary-box").hidden = true;
+            }
+
+
+            const pThead = document.getElementById("preview-thead");
+            const pTbody = document.getElementById("preview-tbody");
+            pThead.innerHTML = "";
+            pTbody.innerHTML = "";
+            if (data.columns && data.columns.length && data.preview_rows) {
+                const trHead = document.createElement("tr");
+                data.columns.forEach(col => {
+                    const th = document.createElement("th");
+                    th.textContent = col;
+                    trHead.appendChild(th);
+                });
+                pThead.appendChild(trHead);
+
+                data.preview_rows.forEach(r => {
+                    const tr = document.createElement("tr");
+                    data.columns.forEach(col => {
+                        const td = document.createElement("td");
+                        td.textContent = r[col] !== null && r[col] !== undefined ? r[col] : "";
+                        tr.appendChild(td);
+                    });
+                    pTbody.appendChild(tr);
+                });
+            }
+            
+
+            populateChartOptions(data.info);
+            updateAxisSelectors();
+            renderSelectedChart();
+
+        } catch (err) {
+            errorAlert.textContent = "Error communicating with server: " + err.message;
+            errorAlert.hidden = false;
+        } finally {
+            analyzeBtn.disabled = false;
+            analyzeBtn.textContent = "Analyze & Plot";
+        }
+    });
+
+    document.getElementById("export-csv-btn").addEventListener("click", () => {
+        if (!datasetPayload || !datasetPayload.csv) return alert("Please analyze data first.");
+        window.downloadBlob(datasetPayload.csv, "axion_data.csv", "text/csv");
+    });
+
+    document.getElementById("export-html-btn").addEventListener("click", () => {
+        if (!currentFigure) return alert("Please generate a chart first.");
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>AXION Data Chart</title><script src="https://cdn.plot.ly/plotly-2.35.2.min.js"><\/script></head><body style="margin:0;padding:20px;background:#151617;"><div id="plot" style="width:100%;height:90vh;"></div><script>Plotly.newPlot('plot', ${JSON.stringify(currentFigure.data)}, ${JSON.stringify(currentFigure.layout)}, {responsive:true});<\/script></body></html>`;
+        window.downloadBlob(html, "axion_chart.html", "text/html");
+    });
+
+
+    form.dispatchEvent(new Event("submit"));
+})();
+</script>
+{% endblock %}
